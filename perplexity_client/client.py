@@ -1,9 +1,14 @@
+import logging
 from enum import StrEnum
 
 import requests
 
+from exceptions import PerplexityClientError
+
 BASE_URL = "https://api.perplexity.ai"
 COMPLETION_URL = "/chat/completions"
+
+log = logging.getLogger(__name__)
 
 
 class PerplexityModels(StrEnum):
@@ -27,7 +32,7 @@ class PerplexityClient:
             messages: list[dict[str, str]],
             model: PerplexityModels = PerplexityModels.MISTRAL_7B_INSTRUCT,
             **kwargs
-    ):
+    ) -> dict:
         payload = {
             "model": model.value,
             "messages": messages,
@@ -37,31 +42,26 @@ class PerplexityClient:
             raise ValueError("You may use only one, frequency_penalty or presence_penalty. Not both.")
 
         match kwargs:
-            case kwargs.get("max_tokens", None):
-                payload = payload | {"max_tokens": kwargs["max_tokens"]}
-            case kwargs.get("temperature", None):
-                temperature = kwargs["temperature"]
-                if 2 < temperature < 0:
+            case {"max_tokens": max_tokens}:
+                payload = payload | {"max_tokens": max_tokens}
+            case {"temperature": temperature}:
+                if 2 < temperature or temperature < 0:
                     raise ValueError("Temperature must be between 0 and 2 included.")
                 payload = payload | {"temperature": temperature}
-            case kwargs.get("top_p", None):
-                top_k = kwargs["top_p"]
-                if 1 < top_k < 0:
+            case {"top_p": top_p}:
+                if 1 < top_p or top_p < 0:
                     raise ValueError("top_p must be between 0 and 1 included.")
-                payload = payload | {"top_k": top_k}
-            case kwargs.get("top_k", None):
-                top_k = kwargs["top_k"]
-                if 2048 < top_k < 0:
+                payload = payload | {"top_p": top_p}
+            case {"top_k": top_k}:
+                if 2048 < top_k or top_k < 0:
                     raise ValueError("top_k must be between 0 and 2048 included.")
                 payload = payload | {"top_k": top_k}
-            case kwargs.get("presence_penalty", None):
-                presence_penalty = kwargs["presence_penalty"]
-                if 2.0 < presence_penalty < -2.0:
+            case {"presence_penalty": presence_penalty}:
+                if 2.0 < presence_penalty or presence_penalty < -2.0:
                     raise ValueError("presence_penalty must be between -2.0 and 2.0 included.")
                 payload = payload | {"presence_penalty": presence_penalty}
-            case kwargs.get("frequency_penalty", None):
-                top_k = kwargs["frequency_penalty"]
-                payload = payload | {"frequency_penalty": top_k}
+            case {"frequency_penalty": frequency_penalty}:
+                payload = payload | {"frequency_penalty": frequency_penalty}
 
         headers = {
             "accept": "application/json",
@@ -70,6 +70,15 @@ class PerplexityClient:
         }
 
         url = self.base_url + COMPLETION_URL
-        response = requests.post(url, json=payload, headers=headers)
 
-        return response.json()
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+            return response.json()
+        except requests.exceptions.ConnectionError as e:
+            raise PerplexityClientError("There was a connection issue to Perplexity API.") from e
+        except requests.exceptions.Timeout as e:
+            raise PerplexityClientError("Request to Perplexity API timed-out.") from e
+        except requests.exceptions.HTTPError as e:
+            raise PerplexityClientError(f"Request to Perplexity API failed.") from e
+        except requests.exceptions.RequestException as e:
+            raise PerplexityClientError("Request to Perplexity API failed") from e

@@ -3,7 +3,7 @@ from enum import StrEnum
 
 import requests
 
-from exceptions import PerplexityClientError
+from perplexity_client.exceptions import PerplexityClientError
 
 BASE_URL = "https://api.perplexity.ai"
 COMPLETION_URL = "/chat/completions"

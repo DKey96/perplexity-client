@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "perplexity-client"
-version = "0.1.0"
+version = "0.1.1"
 description = "Unofficial Perplexity.ai API Client"
 authors = ["Daniel Klic <daniel.klic96@gmail.com>"]
 license = "MIT"
